@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 200" font-family="system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1622"/><stop offset="1" stop-color="#062033"/>
+    </linearGradient>
+    <linearGradient id="ac" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#5eead4"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="200" fill="url(#bg)"/>
+  <g opacity="0.5">
+    <rect x="452" y="50" width="112" height="100" rx="12" fill="#083344" stroke="#22d3ee"/>
+    <circle cx="470" cy="70" r="4" fill="#5eead4"/>
+    <circle cx="484" cy="70" r="4" fill="#5eead4" opacity="0.55"/>
+    <circle cx="498" cy="70" r="4" fill="#5eead4" opacity="0.3"/>
+    <rect x="468" y="94" width="80" height="8" rx="4" fill="#22d3ee"/>
+    <rect x="468" y="110" width="56" height="8" rx="4" fill="#22d3ee" opacity="0.6"/>
+    <rect x="468" y="126" width="68" height="8" rx="4" fill="#22d3ee" opacity="0.35"/>
+    <path d="M508 160 v14 M508 174 l-6 -6 M508 174 l6 -6" stroke="#22d3ee" stroke-width="2" fill="none" stroke-linecap="round"/>
+  </g>
+  <rect x="0" y="0" width="6" height="200" fill="url(#ac)"/>
+  <rect x="36" y="46" height="34" rx="17" width="152" fill="rgba(34,211,238,.15)" stroke="#22d3ee"/>
+  <text x="112" y="69" font-size="15" fill="#a5f3fc" text-anchor="middle">Rust · lilyco 生态</text>
+  <text x="36" y="126" font-size="38" font-weight="700" fill="#ecfeff">lyco-router</text>
+  <text x="36" y="158" font-size="17" fill="#cffafe">按需服务路由器 · 平时零占用 · 有人连才拉起</text>
+</svg>

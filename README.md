@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/banner.svg" alt="lyco-router" width="600">
+</p>
+
 # lyco-router
 
 **按需服务路由器** —— 像 [`itzg/mc-router`](https://github.com/itzg/mc-router) 那样：
