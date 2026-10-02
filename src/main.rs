@@ -318,7 +318,7 @@ fn run_serve(app: &ServeCmd, ctx: &Context) -> Result<serde_json::Value, AppErro
         })
         .collect();
     if targets.is_empty() {
-        return Err(AppError::Runtime("没有 local 服务可托管".into()));
+        ctx.log(LogLevel::Warn, "没有 local 服务可托管，只跑管理页 / API");
     }
     // 管理页 / JSON API（小白入口）
     if app.port > 0 {
