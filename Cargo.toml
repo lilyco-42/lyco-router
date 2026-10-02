@@ -1,0 +1,33 @@
+[package]
+name = "lyco-router"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "按需服务路由器：像 mc-router 一样——平时零占用，有人连才拉起后端，空闲即停。lilyco 一个 struct 出 CLI/TUI/Web/MCP。"
+repository = "https://github.com/lilyco-42/lyco-router"
+
+[[bin]]
+name = "lyco-router"
+path = "src/main.rs"
+
+[dependencies]
+# 门面：默认只取 CLI + MCP（纯 Rust，aarch64 可编，无 crossterm/tokio-web）
+# 本地开发可用 path 覆盖：lilyco = { path = "../lilyco-radxa-work/lilyco", default-features = false }
+lilyco = { version = "0.2", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+anyhow = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "time", "macros", "sync"] }
+
+[features]
+default = []
+# 桌面想用 TUI / Web 界面时再开：
+tui = ["lilyco/tui"]
+web = ["lilyco/web"]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
