@@ -49,9 +49,25 @@ lyco-router add --kind rembg --title "抠图"
 lyco-router list  --root /etc/lyco-router
 lyco-router check --root /etc/lyco-router
 
-# 4. 跑守护进程（前台）
-lyco-router serve --root /etc/lyco-router
+# 4. 跑守护进程（前台）—— 同时起管理页
+lyco-router serve --root /etc/lyco-router --port 8080
+#    浏览器打开 http://<板子IP>:8080/ → 服务卡片 + 「添加服务」表单
 ```
+
+## 管理页 / JSON API
+
+`serve` 会在 `--port`（默认 8080）上同时提供**小白管理页**和 JSON API：
+
+| 路由 | 作用 |
+|---|---|
+| `GET /` | 管理页（卡片式服务列表 + 添加服务表单） |
+| `GET /api/services` | 服务列表（含运行状态） |
+| `POST /api/services` | 注册服务（同 `add`，body: `{kind,url,name,title,key,model}`） |
+| `GET /api/workflows` | 工作流列表 |
+| `GET /api/health` | 健康检查 |
+
+**铁律：业务规则全在后端**（端口分配 / 校验 / manifest 生成都在 Rust 侧），
+前端只是 renderer —— 换掉管理页不影响后端，AI 走 MCP 也走同一套。
 
 TUI / Web 界面（桌面用，需 `--features tui,web` 构建）：
 

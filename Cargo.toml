@@ -19,6 +19,8 @@ serde_json = "1"
 toml = "0.8"
 anyhow = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "time", "macros", "sync"] }
+# 管理页 / JSON API 用的极简 HTTP 服务（纯 Rust，同步、线程模型，几十 KB）
+tiny_http = "0.12"
 
 [features]
 default = []

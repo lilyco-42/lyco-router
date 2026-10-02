@@ -10,6 +10,7 @@
 //! lyco-router --mcp                                   # 暴露为 MCP 服务器
 //! ```
 
+mod api;
 mod config;
 mod daemon;
 mod scaffold;
@@ -290,6 +291,9 @@ struct ServeCmd {
     /// 空闲回收扫描间隔（秒）
     #[arg(about = "空闲回收扫描间隔（秒）", default = 5)]
     idle_check_secs: u64,
+    /// 管理页 / JSON API 端口（0 = 关闭）
+    #[arg(about = "管理页 / JSON API 端口（0 = 关闭）", default = 8080)]
+    port: u16,
 }
 
 fn run_serve(app: &ServeCmd, ctx: &Context) -> Result<serde_json::Value, AppError> {
@@ -315,6 +319,12 @@ fn run_serve(app: &ServeCmd, ctx: &Context) -> Result<serde_json::Value, AppErro
         .collect();
     if targets.is_empty() {
         return Err(AppError::Runtime("没有 local 服务可托管".into()));
+    }
+    // 管理页 / JSON API（小白入口）
+    if app.port > 0 {
+        let p = api::spawn(store.root.clone(), app.port)
+            .map_err(|e| AppError::Runtime(format!("管理页启动失败: {e}")))?;
+        ctx.log(LogLevel::Info, format!("管理页: http://<板子IP>:{p}/  （JSON API: /api/services）"));
     }
     ctx.emit(Progress::Started {
         total: None,
