@@ -21,6 +21,42 @@
 
 ---
 
+## ⚡ 最快路径：一条命令接 CLI 工具（`lyco-tool`）
+
+仓库 `tools/` 带了两个文件，装到板子上就有一条命令：
+
+```bash
+install -m0755 tools/cli-bridge.py /opt/lyco/cli-bridge.py
+install -m0755 tools/lyco-tool.sh  /usr/local/bin/lyco-tool
+
+# 一条命令接任意 CLI 工具
+lyco-tool add --name brush --title "brush shell" --cmd "brush -c"
+```
+
+它一次做完 4 件事：
+
+```
+[1/4] 注册 manifest（端口自动分配）   → listen 7303 / backend 7403
+[2/4] 写 systemd 单元（不 enable）    → /etc/systemd/system/lyco-brush.service
+[3/4] 重启 lyco-router 收编
+[4/4] 自检（起一次 + health）
+```
+
+之后按需调用：
+
+```bash
+curl -X POST http://<板子IP>:7303/ -d 'x=42; for i in 1 2 3; do echo "i=$i x=$x"; done'
+# → {"ok":true,"code":0,"stdout":"i=1 x=42\ni=2 x=42\ni=3 x=42\n"}
+```
+
+**实测通过**（板子上的 brush 0.4.0）：真 bash 语法全通 —— for 循环 / 变量 / `$(pwd)` / `2>&1`。
+后端平时休眠，**一 POST 就自动唤醒**，空闲 300s 自动停。
+
+> `--cmd` 里放的是「命令前缀」，POST 的 body 会作为**最后一个参数**追加。
+> 例：`--cmd "brush -c"` + body `echo hi` → 执行 `brush -c 'echo hi'`。
+
+---
+
 ## 模板 A：常驻服务（最直接）
 
 **1. 写 systemd 单元** `/etc/systemd/system/lyco-mytool.service`
