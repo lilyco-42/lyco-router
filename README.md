@@ -11,6 +11,7 @@
 用 [lilyco](https://github.com/lilyco-42/lilyco) 框架写成：一个 struct 出 **CLI / TUI / Web / MCP** 四端。
 
 配置规范见 **[SPEC.md](SPEC.md)**（`lyco/v1`）：约定优于配置，加一个文件夹 = 加一个服务。
+**开发者接入指南见 [docs/DEVELOPING.md](docs/DEVELOPING.md)** —— 你的工具（常驻服务 / 远程 API / CLI / Agent 工具）分别怎么接进来，附 `dsh-tool-brush` 实例。
 
 ## 为什么
 
