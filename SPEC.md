@@ -149,42 +149,64 @@ api_version = "lyco/v1"
 [workflow]
 name  = "video2subtitle"
 title = "视频转字幕"
-about = "上传视频 → 得到 SRT 字幕"
+about = "视频 → 抽音 → 转写 → SRT"
 
 [[step]]
 id   = "audio"
-use  = "media"                          # 引用 capability kind
-with = { format = "wav" }
-in   = "{{input.video}}"
+use  = "ffmpeg"                                     # ← 元素（PATH 上的命令）
+args = ["-y", "-i", "{{in}}", "-vn", "-ac", "1", "-ar", "16000", "{{out}}"]
 out  = "audio.wav"
 
 [[step]]
 id   = "asr"
-use  = "asr"
-with = { model = "{{params.asr_model}}" }   # 模板/用户参数注入
-in   = "audio.wav"
-out  = "text"
+use  = "whisper"
+args = ["-m", "/opt/lyco/models/ggml-base.bin", "-f", "{{in}}", "-osrt", "-of", "{{outbase}}"]
+out  = "asr.srt"
 
 [[step]]
-id   = "sub"
-use  = "subtitle"
-in   = "text"
-out  = "{{output.srt}}"
+id   = "clean"
+use  = "cat"
+args = ["{{in}}"]
+out  = "final.srt"
 ```
 
-### 变量约定
+> **元素 = 一个命令**（`ffmpeg` / `whisper` / `cat` …，或已注册的服务名）。
+> **工作流 = 元素按顺序拼接；上一步的产物 = 下一步的输入。**
 
-| 语法 | 含义 |
+### 变量
+
+| 变量 | 含义 |
 |---|---|
-| `{{input.*}}` | 工作流入参（如上传的文件） |
-| `{{output.*}}` | 产物（供下载/下一步） |
-| `{{params.*}}` | 模板默认值 / 用户覆盖 |
+| `{{in}}` | **上一步的产物**（第一步则是工作流入参） |
+| `{{out}}` | 本步产物路径（`<outdir>/<step.out>`） |
+| `{{outbase}}` | 本步产物**去掉扩展名**（给 `-of` 这类参数用） |
+| `{{outdir}}` | 本次运行的工作目录 |
+
+### 输入怎么交给元素
+
+| 方式 | 写法 | 适合 |
+|---|---|---|
+| **路径参数** | `args = ["-i", "{{in}}", …, "{{out}}"]` | ffmpeg / whisper 这类「吃路径、写路径」的 |
+| **stdin 管道** | `pipe = true` | cat / tr / sed / grep 这类从 stdin 读的 |
+| **stdout 落盘** | 自动：若 `out` 文件没生成但 stdout 非空 → 写入 | `cat` / `echo` 这类只往 stdout 写的 |
 
 ### 规则
 
-- 步骤**按声明顺序**执行；上一步 `out` 可作下一步 `in`。
-- `use` 可填 **capability kind**（自动选默认 provider）或 **具体 service name**（强制）。
-- 引用不存在的 kind/service → `check` 报错并跳过该工作流。
+- 步骤**按声明顺序**执行；**失败即停**，报「哪一步 + 退出码 + stderr」。
+- `use` 可以是 **PATH 上的命令** / **capability kind** / **已注册的服务名**。
+- 每步必须在 `out` 上生成产物，否则报错。
+- `check` 验证 `use` 可用性（kind / 服务名 / PATH 三选一）。
+
+### 执行
+
+```bash
+lyco-router run --name video2subtitle --input 视频.mp4
+# 或 API
+curl -X POST http://<板子IP>:8080/api/workflows/video2subtitle/run \
+  -H 'Content-Type: application/json' -d '{"input":"/path/视频.mp4"}'
+```
+
+返回逐步结果（`cmdline` / `code` / `ms` / `out` / `stdout` / `stderr`）+ 最终产物路径。
 
 ---
 

@@ -111,12 +111,22 @@ pub struct WorkflowMeta {
 pub struct Step {
     #[serde(default)]
     pub id: String,
+    /// 元素：PATH 上的命令名，或已注册的服务名
     #[serde(rename = "use")]
     pub use_: String,
+    /// 有序参数（会被拼到元素后面）；支持 `{{in}}` `{{out}}` `{{outdir}}`
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// 把上一步的产物通过 **stdin** 喂给元素（适合 cat / tr / sed / grep 这类）
+    #[serde(default)]
+    pub pipe: bool,
+    /// 结构化参数（保留，等价于 args 的另一种写法）
     #[serde(default)]
     pub with: Option<toml::Value>,
+    /// 输入说明（自由文本，供人读；执行时以「上一步的产物」为准）
     #[serde(default, rename = "in")]
     pub in_: String,
+    /// 产物文件名（落在本次运行的工作目录里）
     #[serde(default)]
     pub out: String,
 }
@@ -263,10 +273,13 @@ impl Store {
                 errs.push(format!("工作流 {}: 没有任何 [[step]]", w.workflow.name));
             }
             for st in &w.steps {
-                if !KINDS.contains(&st.use_.as_str()) && !svc_names.contains(st.use_.as_str()) {
+                if !KINDS.contains(&st.use_.as_str())
+                    && !svc_names.contains(st.use_.as_str())
+                    && !on_path(&st.use_)
+                {
                     errs.push(format!(
-                        "工作流 {}: 步骤 `{}` 引用了不存在的 kind/service",
-                        w.workflow.name, st.use_
+                        "工作流 {}: 步骤 `{}` —— 元素 `{}` 既不是已知 kind/服务，也不在 PATH 上",
+                        w.workflow.name, st.id, st.use_
                     ));
                 }
             }
@@ -302,6 +315,32 @@ impl Store {
 }
 
 // ────────────────────────── helpers ──────────────────────────
+
+#[cfg(windows)]
+const EXE_EXTS: &[&str] = &["", ".exe"];
+#[cfg(not(windows))]
+const EXE_EXTS: &[&str] = &[""];
+
+/// 元素是否可用：带路径的直接看文件；否则在 PATH 上找（Windows 兼顾 `.exe`）
+pub fn on_path(name: &str) -> bool {
+    if name.trim().is_empty() {
+        return false;
+    }
+    let p = Path::new(name);
+    if p.components().count() > 1 {
+        return p.is_file();
+    }
+    if let Some(paths) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&paths) {
+            for ext in EXE_EXTS {
+                if dir.join(format!("{name}{ext}")).is_file() {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
 
 pub fn port_of(addr: &str) -> Option<u16> {
     addr.rsplit_once(':').and_then(|(_, p)| p.parse().ok())
@@ -410,31 +449,32 @@ model       = "gpt-4o-mini"
 "#;
 
 /// `init` 用：示例工作流
+///
+/// **元素 = PATH 上的一个命令**；**工作流 = 有序步骤，上一步的产物 = 下一步的输入**。
 pub const EXAMPLE_WORKFLOW: &str = r#"api_version = "lyco/v1"
 
 [workflow]
 name  = "video2subtitle"
 title = "视频转字幕"
-about = "上传视频 → 得到 SRT 字幕"
+about = "视频 → 抽音 → 转写 → SRT"
 
 [[step]]
 id   = "audio"
-use  = "media"
-with = { format = "wav" }
-in   = "{{input.video}}"
+use  = "ffmpeg"
+args = ["-y", "-i", "{{in}}", "-vn", "-ac", "1", "-ar", "16000", "{{out}}"]
 out  = "audio.wav"
 
 [[step]]
 id   = "asr"
-use  = "asr"
-in   = "audio.wav"
-out  = "text"
+use  = "whisper"
+args = ["-m", "/opt/lyco/models/ggml-base.bin", "-f", "{{in}}", "-osrt", "-of", "{{outbase}}"]
+out  = "asr.srt"
 
 [[step]]
-id   = "sub"
-use  = "custom"
-in   = "text"
-out  = "{{output.srt}}"
+id   = "clean"
+use  = "cat"
+args = ["{{in}}"]
+out  = "final.srt"
 "#;
 
 // ────────────────────────── tests ──────────────────────────
@@ -543,12 +583,14 @@ mod tests {
             steps: vec![Step {
                 id: "s".into(),
                 use_: "nope".into(),
+                args: vec![],
+                pipe: false,
                 with: None,
                 in_: String::new(),
                 out: String::new(),
             }],
         });
         let errs = store.validate();
-        assert!(errs.iter().any(|e| e.contains("引用了不存在的 kind/service")), "{errs:?}");
+        assert!(errs.iter().any(|e| e.contains("不在 PATH 上")), "{errs:?}");
     }
 }

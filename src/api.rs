@@ -3,7 +3,7 @@
 //! 铁律：**业务规则全在后端**（scaffold / config），前端只是 renderer。
 //! 端口分配、校验、manifest 生成都发生在 Rust 侧，换掉前端不影响后端。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use tiny_http::{Header, Method, Request, Response, Server};
@@ -80,6 +80,12 @@ fn handle(root: &PathBuf, mut req: Request) {
             resp = resp.with_header(h);
         }
         let _ = req.respond(resp);
+        return;
+    }
+
+    // 动态路由：POST /api/workflows/<name>/run
+    if method == Method::Post && url.starts_with("/api/workflows/") && url.ends_with("/run") {
+        run_workflow(root, req, &url);
         return;
     }
 
@@ -180,5 +186,69 @@ fn handle(root: &PathBuf, mut req: Request) {
             );
         }
         _ => send_json(req, 404, serde_json::json!({"ok": false, "error": "not found"})),
+    }
+}
+
+#[derive(Deserialize)]
+struct RunReq {
+    #[serde(default)]
+    input: String,
+    #[serde(default)]
+    outdir: String,
+}
+
+/// `POST /api/workflows/<name>/run`  body: `{"input":"<文件路径>","outdir":"<可选>"}`
+///
+/// 按顺序跑工作流的元素，返回逐步结果 + 最终产物路径。
+fn run_workflow(root: &PathBuf, mut req: Request, url: &str) {
+    let name = url
+        .trim_start_matches("/api/workflows/")
+        .trim_end_matches("/run")
+        .trim_end_matches('/')
+        .to_string();
+
+    let mut body = String::new();
+    let _ = req.as_reader().read_to_string(&mut body);
+    let parsed: RunReq = serde_json::from_str(&body).unwrap_or(RunReq {
+        input: String::new(),
+        outdir: String::new(),
+    });
+    if parsed.input.trim().is_empty() {
+        send_json(
+            req,
+            400,
+            serde_json::json!({"ok": false, "error": "需要 {\"input\": \"<文件路径>\"}"}),
+        );
+        return;
+    }
+
+    let store = Store::load(root);
+    let Some(wf) = store.workflows.iter().find(|w| w.workflow.name == name) else {
+        send_json(
+            req,
+            404,
+            serde_json::json!({"ok": false, "error": format!("没有工作流 `{name}`")}),
+        );
+        return;
+    };
+    let outdir = if parsed.outdir.trim().is_empty() {
+        format!("/tmp/lyco-run-{name}")
+    } else {
+        parsed.outdir.clone()
+    };
+
+    match crate::flow::run(wf, Path::new(&parsed.input), Path::new(&outdir), &|_m: String| {}) {
+        Ok((results, last)) => {
+            let steps: Vec<_> = results.iter().map(|r| r.to_json()).collect();
+            send_json(
+                req,
+                200,
+                serde_json::json!({
+                    "ok": true, "workflow": name, "steps": steps,
+                    "output": last.display().to_string(), "outdir": outdir,
+                }),
+            );
+        }
+        Err(e) => send_json(req, 500, serde_json::json!({"ok": false, "error": e})),
     }
 }

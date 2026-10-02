@@ -1,4 +1,6 @@
 /target
 /testroot
 /dist
+/run-out
+/run-api
 *.log

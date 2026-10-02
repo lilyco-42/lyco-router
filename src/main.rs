@@ -13,9 +13,10 @@
 mod api;
 mod config;
 mod daemon;
+mod flow;
 mod scaffold;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use lilyco::prelude::*;
@@ -339,6 +340,59 @@ fn run_serve(app: &ServeCmd, ctx: &Context) -> Result<serde_json::Value, AppErro
     Ok(serde_json::json!({"ok": true}))
 }
 
+// ────────────────────────────── run ──────────────────────────────
+
+/// 执行一个工作流（元素按顺序拼接，上一步的产物喂下一步）
+#[derive(App)]
+#[app(name = "run", about = "执行工作流：元素按顺序拼接，上一步的产物 = 下一步的输入", run = "run_flow")]
+struct RunCmd {
+    /// 工作流名
+    #[arg(about = "工作流名")]
+    name: String,
+    /// 输入文件
+    #[arg(about = "输入文件（工作流入参）", must_exist = true)]
+    input: PathBuf,
+    /// 配置根目录
+    #[arg(about = "配置根目录", default = "/etc/lyco-router")]
+    root: String,
+    /// 产物目录
+    #[arg(about = "产物目录（默认 /tmp/lyco-run-<name>）", default = "")]
+    outdir: String,
+}
+
+fn run_flow(app: &RunCmd, ctx: &Context) -> Result<serde_json::Value, AppError> {
+    let start = Instant::now();
+    let store = config::Store::load(Path::new(&app.root));
+    let wf = store
+        .workflows
+        .iter()
+        .find(|w| w.workflow.name == app.name)
+        .ok_or_else(|| AppError::InvalidArg(format!("没有工作流 `{}`", app.name)))?;
+    let outdir = if app.outdir.trim().is_empty() {
+        format!("/tmp/lyco-run-{}", app.name)
+    } else {
+        app.outdir.clone()
+    };
+    ctx.emit(Progress::Started {
+        total: Some(wf.steps.len() as u64),
+        message: Some(format!("执行工作流 {}（{} 步）", wf.workflow.name, wf.steps.len())),
+    });
+    let (results, last) = flow::run(wf, &app.input, Path::new(&outdir), &|m: String| {
+        ctx.log(LogLevel::Info, m);
+    })
+    .map_err(AppError::Runtime)?;
+    let steps: Vec<_> = results.iter().map(|r| r.to_json()).collect();
+    let result = serde_json::json!({
+        "ok": true,
+        "workflow": wf.workflow.name,
+        "steps": steps,
+        "output": last.display().to_string(),
+        "outdir": outdir,
+    });
+    ctx.done(result.clone(), start.elapsed().as_millis() as u64);
+    Ok(result)
+}
+
 // ────────────────────────────── init ──────────────────────────────
 
 /// 建立配置目录骨架（含示例）
@@ -373,6 +427,7 @@ fn build_registry() -> Registry {
     registry.register(RegisteredCommand::from_app::<StatusCmd>()).unwrap();
     registry.register(RegisteredCommand::from_app::<UpCmd>()).unwrap();
     registry.register(RegisteredCommand::from_app::<DownCmd>()).unwrap();
+    registry.register(RegisteredCommand::from_app::<RunCmd>()).unwrap();
     registry.register(RegisteredCommand::from_app::<ServeCmd>()).unwrap();
     registry.register(RegisteredCommand::from_app::<InitCmd>()).unwrap();
     registry
