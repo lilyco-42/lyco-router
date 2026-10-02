@@ -31,6 +31,35 @@
            down = "systemctl stop lyco-rembg"  ← 自动停掉
 ```
 
+## 工作流：元素按顺序拼接
+
+**元素 = 一个命令**（`ffmpeg` / `whisper` / `cat` …，或已注册的服务名）。
+**工作流 = 有序步骤；上一步的产物 = 下一步的输入。**
+
+```toml
+[[step]]
+id   = "audio"
+use  = "ffmpeg"
+args = ["-y", "-i", "{{in}}", "-vn", "-ac", "1", "-ar", "16000", "{{out}}"]
+out  = "audio.wav"
+
+[[step]]
+id   = "asr"
+use  = "whisper"
+args = ["-m", "/opt/lyco/models/ggml-base.bin", "-f", "{{in}}", "-osrt", "-of", "{{outbase}}"]
+out  = "asr.srt"
+```
+
+```bash
+lyco-router run --name video2subtitle --input 视频.mp4
+```
+
+**实测**（板子上，3.4 秒测试视频）：**4.4 秒**跑完 `ffmpeg 抽音 → whisper 转写 → SRT`，
+产物 `final.srt` 正确落地。
+
+输入交给元素有三种方式：**路径参数**（`{{in}}`）· **stdin 管道**（`pipe = true`）· **stdout 落盘**（自动）。
+失败即停，报「哪一步 + 退出码 + stderr」。
+
 ## 构建
 
 ```bash
@@ -53,6 +82,9 @@ lyco-router add --kind rembg --title "抠图"
 # 3. 看 / 校验
 lyco-router list  --root /etc/lyco-router
 lyco-router check --root /etc/lyco-router
+
+# 3.5 跑一个工作流（元素按顺序拼接）
+lyco-router run --name video2subtitle --input 视频.mp4
 
 # 4. 跑守护进程（前台）—— 同时起管理页
 lyco-router serve --root /etc/lyco-router --port 8080
