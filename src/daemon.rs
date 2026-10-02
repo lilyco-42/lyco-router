@@ -119,6 +119,10 @@ pub async fn serve(targets: Vec<Target>, idle_check_secs: u64) -> anyhow::Result
             }
         }));
     }
+    if tasks.is_empty() {
+        // 没有 local 服务也要常驻（只跑管理页 / API）
+        std::future::pending::<()>().await;
+    }
     for task in tasks {
         let _ = task.await;
     }
